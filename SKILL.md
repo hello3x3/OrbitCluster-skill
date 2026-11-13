@@ -68,6 +68,16 @@ orbit instances wait ID --until saved --timeout 1800 --json
 
 ## 更新与卸载
 
-登录成功会检查门户是否发布新版，只提醒，不自动安装。`orbit update --check --json` 只检查，无需登录、不下载包；用户要求更新时执行 `orbit update --json`，从同一门户下载并校验，保留配置与登录且不续期。Windows 返回 `scheduled` 时，等当前命令退出后用 `orbit --version` 确认；失败日志见 `log_file`。只有更新提醒时不要擅自安装。旧版没有 update 或便携版没有安装记录时使用原门户安装命令。
+skill 由门户发布，CLI 负责安装和更新，不从 GitHub 或其它地址获取：
 
-用户要求卸载时用 `orbit uninstall`，明确要求清除本机配置和登录时再加 `--purge`；已获用户授权的非交互执行加 `--yes --json`。`orbit logout` 撤销当前服务器令牌，卸载或本机清理不会停止集群任务或删除服务器资产。卸载默认保留本机配置，不扩展为删除其它目录。
+```bash
+orbit skill status --json              # 查看各 agent 的安装状态与门户版本，不写文件
+orbit skill install --agent codex      # 或 claude / all；默认安装到已存在的 ~/.codex、~/.claude
+orbit skill update --json              # 更新已安装且未被本地修改的 skill
+```
+
+`orbit update --check --json` 只检查 CLI 和已安装 skill，无需登录、不下载包；用户要求更新时执行 `orbit update --json`，从同一门户下载并校验，同时更新已安装的 skill，保留配置与登录且不续期。返回中的 `skill` 字段说明 skill 状态。Windows 返回 `scheduled` 时，等当前命令退出后用 `orbit --version` 确认；失败日志见 `log_file`。旧版没有 update 或便携版没有安装记录时使用原门户安装命令。
+
+每天首次运行其它命令时 CLI 会自动检查：未被修改的 skill 直接更新（重启 agent 后生效），CLI 新版只提醒，不自动安装。用户关闭后（`orbit config set auto_update false`）不要擅自打开。skill 状态为 `modified` 表示用户改过本机文件，只有用户明确同意覆盖时才用 `orbit skill update --force`（原文件备份为 `SKILL.md.bak`）。只有更新提醒时不要擅自安装 CLI。
+
+用户要求卸载时用 `orbit uninstall`，明确要求清除本机配置和登录时再加 `--purge`；已获用户授权的非交互执行加 `--yes --json`。`orbit logout` 撤销当前服务器令牌，卸载或本机清理不会停止集群任务或删除服务器资产。卸载默认保留本机配置，不扩展为删除其它目录，也不删除已安装的 skill。
