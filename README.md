@@ -13,7 +13,7 @@ orbit skill status         # 查看是否有新版
 orbit skill update         # 更新；orbit update 也会一并更新
 ```
 
-CLI 每天首次运行时自动检查，未被本地修改的 skill 会自动更新。
+CLI 登录后及每日首次运行时会检查安装状态；未安装时提示 `orbit skill install`，已安装且未被本地修改的 skill 会在每日检查时自动更新。
 
 ## 发布新版本
 
