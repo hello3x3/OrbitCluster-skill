@@ -77,4 +77,7 @@ orbit instances wait ID --until saved --timeout 1800 --json
 
 ## 更新与卸载
 
-更新使用同一门户安装命令。用户要求卸载时用 `orbit uninstall`，明确要求清除本机配置和登录时再加 `--purge`；已获用户授权的非交互执行加 `--yes --json`。`orbit logout` 撤销当前服务器令牌，卸载或本机清理不会停止集群任务或删除服务器资产。卸载默认保留本机配置，不扩展为删除其它目录。
+- `orbit skill status --json` 检查安装状态与门户版本；`orbit skill install --agent codex|claude|all` 安装本 skill，`orbit skill update` 更新已安装的副本。
+- 登录后和每日首次运行时检查；未安装会提示安装，未被本地修改的已安装 skill 会在每日检查时更新。`orbit config set auto_update false` 可关闭每日检查。含本地修改的副本只有用户同意后才用 `--force` 覆盖，并保留 `.bak` 备份。
+- `orbit update --check` 只检查；用户要求更新 CLI 时执行 `orbit update`，同时更新已安装的 skill，保留配置和凭据，不延长认证期限。旧版没有这些命令时重新执行同一门户安装命令升级一次。
+- 用户要求卸载时用 `orbit uninstall`，明确要求清除本机配置和登录时再加 `--purge`；已获授权的非交互执行加 `--yes --json`。`orbit logout` 撤销当前服务器令牌；卸载不停止集群任务、不删除服务器资产，默认保留本机配置和已安装的 skill。

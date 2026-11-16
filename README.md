@@ -1,30 +1,26 @@
 # OrbitCluster agent skill
 
-Agent skill（Codex / Claude Code）for the OrbitCluster user CLI `orbit`. It is mounted as the
-`skills/orbitcluster` submodule of [hello3x3/OrbitCluster](https://github.com/hello3x3/OrbitCluster).
+面向 Codex / Claude Code 的 OrbitCluster 用户操作说明。版本源为 `VERSION`，入口为 `SKILL.md`。
 
 ## 用户安装与更新
 
-用户不需要克隆本仓库。skill 随门户发布，由 CLI 从用户所在门户下载并校验 SHA256：
+CLI 0.4.2+ 从用户配置的门户获取 `/terminal/skill.json` 和 `/terminal/skill.md`，校验大小与 SHA256 后写入 agent 目录；用户不需要访问 GitHub。
 
 ```bash
-orbit skill install        # 安装到 ~/.codex/skills/orbitcluster、~/.claude/skills/orbitcluster
-orbit skill status         # 查看是否有新版
-orbit skill update         # 更新；orbit update 也会一并更新
+orbit skill status --json
+orbit skill install --agent codex   # 或 claude / all；省略时选择已配置的 agent
+orbit skill update
+orbit update --check
 ```
 
-CLI 登录后及每日首次运行时会检查安装状态；未安装时提示 `orbit skill install`，已安装且未被本地修改的 skill 会在每日检查时自动更新。
+登录和每日检查会提醒未安装的用户；每日检查自动更新未被本地修改的副本。CLI 只提示新版，用户执行 `orbit update` 才安装。含本地修改的 skill 需明确同意后使用 `--force`，并保留备份。旧 CLI 没有以上命令时，先重新执行门户安装器。
 
-## 发布新版本
+## 三仓库发布顺序
 
-1. 修改 `SKILL.md`，并把 `VERSION` 递增（如 `1.1.0` → `1.2.0`），提交并推送本仓库。
-2. 在 OrbitCluster 主仓库更新子模块指针并打包：
+依赖关系为 `OrbitCluster/terminal` → `OrbitCluster-CLI`，再由 CLI 的 `skills/orbitcluster` → 本仓库。
 
-   ```bash
-   git submodule update --remote skills/orbitcluster
-   python3 oa/cluster-portal/scripts/bundle_docs.py
-   git add skills/orbitcluster oa/cluster-portal/portalapp/static/docs
-   git commit -m "chore(skill): bump orbitcluster skill to X.Y.Z"
-   ```
+1. 修改 `SKILL.md` 并递增 `VERSION`，测试、提交并推送本仓库。
+2. 在 **OrbitCluster-CLI 仓库根目录**运行 `git submodule update --remote skills/orbitcluster`，提交并推送子模块指针。
+3. 在 **OrbitCluster 主仓库根目录**运行 `git submodule update --remote terminal` 和 `git submodule update --init --recursive`，重新 `mvn -f oa/cluster-portal/pom.xml clean verify` 并打包部署门户，提交 `terminal` 指针。
 
-3. 部署门户后，`/terminal/skill.json` 发布新版本与 SHA256，用户端 CLI 随即可更新。
+Maven 从两级子模块打包 skill 文档与版本；门户据此生成 skill 清单。仅更新 skill 不要求重新编译 CLI。若 CLI 源码也变更，则必须递增 CLI 版本并重新生成、部署对应安装包。推送 GitHub 本身不会更新已部署门户或用户文件。
