@@ -26,16 +26,30 @@ macOS/Linux 示例，替换为用户提供的真实地址：
 
 HTTP 默认支持，适用于用户的实验室内网；HTTP 会明文传输凭证。HTTPS 正常校验证书，内部 CA 使用 `--ca-bundle '/本机证书路径'`，不跳过验证。安装器显示进度并校验 SHA256；下载缺包或失败时报告问题，不回退到 Git/Python 安装。服务器需要部署现有终端 API 和客户端发布包，skill 不代替管理员改配置。
 
-让用户本人在真实终端执行 `orbit login --username 用户名` 隐藏输入密码。不要索取聊天中的密码，不读取、复制或输出 `auth.json`，不使用浏览器 Cookie。通过 `orbit whoami --json` 检查身份；凭证默认七天，按返回时间到期，由用户重新登录，无自动续期。新 CLI 可读取旧版按服务地址隔离的配置与凭证。
+验证码选项需要 CLI 0.5.0 适配版和门户终端接口支持，具体先看 `orbit login --help`；旧版没有选项时交由维护者升级，不回退到密码登录。
+
+登录由用户本人在真实终端执行 `orbit login --username 用户名`：请求发送飞书验证码，再隐藏输入四位验证码。受控分步流程先 `orbit login --username 用户名 --send-code`，收到验证码后用 `--code-stdin` 验证已有验证码；不要把验证码放进命令行或聊天。不要再要求密码；不读取、复制或输出 `auth.json`，不使用浏览器 Cookie。
+
+通过 `orbit whoami --json` 检查身份；已有有效终端凭证继续使用，按服务器返回时间到期，默认七天且不自动续期。验证码登录需要门户提供专用终端接口；若 CLI 报 `otp_not_supported`，让主项目维护者接入接口，不回退到密码、不修改用户密码，也不要声称仅有网页验证码就已完成 CLI 登录。
 
 ## 容器环境与存储
 
-- **本系统以容器为核心**：每个资源是独立容器；容器默认以普通用户身份运行。需要系统包/ CUDA toolkit 时，在容器内用 `unshare -Ur --map-root-user bash` 获得用户命名空间 root（`whoami` 为 root，仅限容器，不是宿主机 root）；`su` 在展开后的 rootfs 中没有 setuid 位，不能切换 root。普通用户可直接跑 `apt-get update` 更新索引，但 `apt-get install` 的 dpkg 会报 requires superuser privilege；安装包用上面的 `unshare` root。不要建议在 rootless 容器里安装/依赖 `sudo`：setuid 属主会映射回普通用户，sudo 无法运行。
-- 基础容器已预装 Miniconda，路径 `/opt/miniconda3`；执行 `source /opt/miniconda3/etc/profile.d/conda.sh` 后使用 `conda`。不要建议用户在家目录重复安装 Miniconda。
-- 家目录 `/share/home/<用户名>` 只放代码和小型配置；提醒用户不要把大型数据集、conda 环境、checkpoint 或大量结果放在 home（NFS + 配额）。
-- 平台使用 enroot/pyxis，不支持容器内 Docker/Podman（没有 Docker daemon/socket）；Docker 镜像需管理员用 `enroot import` 转成 `.sqsh`。
-- 单个个人镜像上限 **30 GiB**；保存前检查容器 rootfs，导出后再检查镜像文件，超限保存会被拒绝。**到期自动保存默认关闭，到期直接停机**；需要保留环境时提示用户提前手动保存，或由管理员在 `/etc/cluster-portal/site.conf` 设置 `AUTO_SAVE_ON_EXPIRE=1`。不要建议用户把 ckpt 写进容器根目录。
-- 数据优先从只读 NAS `/mnt/nas/...` 直接读取，不要整份复制到 home。代码和少量重要文件放 home 持久保存；容器内环境需要长期保留时保存个人镜像。
+- 每个资源是独立的 enroot/pyxis 容器；代码、训练、调试和软件环境都在容器内运行。平台不提供容器内 Docker/Podman 或 Docker socket；需要外部 Docker 镜像时，由管理员用 `enroot import` 转成 `.sqsh`。
+- **平台基础镜像已预装 Miniconda，位置是 `/opt/miniconda3`。不要在 home 或挂载存储里重装 Conda。** 新版 SSH 交互登录默认激活 base；旧镜像和非交互命令显式初始化：
+
+```bash
+source /opt/miniconda3/etc/profile.d/conda.sh
+conda activate base
+conda create -p /opt/miniconda3/envs/myenv python=3.11
+conda activate /opt/miniconda3/envs/myenv
+```
+
+- **Conda 环境建在容器 rootfs 的 `/opt/miniconda3/envs/<环境名>` 下。** 不要放在 `/share/home/<用户名>`、`/data`、`/mnt/nas` 等挂载存储路径；挂载的数据不包含在保存的个人镜像里。基础镜像的包缓存位于 `/tmp/conda-pkgs`；保存前可用 `conda clean -afy` 清理缓存，减少镜像体积。
+- 安装完依赖后，用 `orbit images save --instance ID --name NAME --json` 保存个人镜像，并等 `orbit instances wait ID --until saved --timeout 1800 --json` 成功。之后选择该个人镜像创建资源即可复用环境。镜像保存不包含运行中的进程、内存或挂载数据。
+- 日常使用普通用户。安装系统包/CUDA toolkit 时，在容器内执行 `unshare -Ur --map-root-user bash`，再运行 `apt-get update` / `apt-get install ...`；`whoami` 显示的 root 仅限用户命名空间，不是宿主机 root，`exit` 返回普通用户。新基础镜像的 `su` 函数也是该命名空间的便捷包装；不要索取 root 密码或依赖传统 setuid `su` / `sudo`。
+- 普通用户的 `apt-get update` 可能成功，因为展开的 rootfs 归用户所有；安装包所用的 `dpkg` 仍需上述 root shell。
+- `/share/home/<用户名>` 只放代码和小型配置，计入 NFS 配额；大型数据集、checkpoint 和大量结果使用站点提供的存储，数据优先从只读 NAS `/mnt/nas/...` 直接读取，不要整份复制到 home，也不要塞进容器 rootfs。
+- 单个个人镜像上限 **30 GiB**；**到期自动保存默认关闭，到期直接停机**。需要保留环境时提前手动保存，不要指望退出 CLI、停机或重启会保留未保存的环境修改。
 
 ## 查询与申请
 
@@ -73,7 +87,7 @@ orbit instances wait ID --until saved --timeout 1800 --json
 - 写请求超时后先查询任务、镜像、日志，判断是否已成功，不盲目重试创建、重启或镜像导出。
 - 退出码 3 表示需登录，让用户在终端重新认证；2 是配置/参数问题，4 是网络问题，1 是业务拒绝或等待超时，0 成功。
 
-个人镜像、显示名、密码与 SSH 公钥的其他命令先读对应的 `--help`。资产页中的数据集和模型仓库目前是前端占位，不能声称已通过 CLI 查询或管理这些资产。
+个人镜像、显示名与 SSH 公钥的其他命令先读对应的 `--help`。资产页中的数据集和模型仓库目前是前端占位，不能声称已通过 CLI 查询或管理这些资产。
 
 ## 更新与卸载
 
